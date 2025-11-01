@@ -10,6 +10,6 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@autositefix/auditor": "workspace:*"
+    "@autositefix/auditor": "0.1.0"
   }
 }

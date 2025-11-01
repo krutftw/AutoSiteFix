@@ -10,9 +10,9 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@autositefix/auditor": "workspace:*",
-    "@autositefix/fixer": "workspace:*",
-    "@autositefix/report": "workspace:*",
+    "@autositefix/auditor": "0.1.0",
+    "@autositefix/fixer": "0.1.0",
+    "@autositefix/report": "0.1.0",
     "@octokit/rest": "^20.1.1",
     "simple-git": "^3.22.0"
   }
