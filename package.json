@@ -5,7 +5,9 @@
   "description": "AutoSiteFix monorepo for auditing and automated web optimizations.",
   "license": "MIT",
   "scripts": {
-    "build": "tsc -b",
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "start": "pnpm -r start",
     "clean": "rimraf dist",
     "lint": "eslint \"**/*.{ts,tsx}\" --max-warnings 0",
     "format": "prettier --write .",
@@ -14,14 +16,17 @@
     "typecheck": "tsc -b"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*",
+    "wordpress-plugin"
   ],
   "engines": {
-    "node": ">=18.17.0"
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.6.8",
     "@types/babel__traverse": "^7.20.5",
+    "@types/node": "^20.12.7",
     "@types/yargs": "^17.0.32",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
@@ -33,7 +38,6 @@
     "rimraf": "^5.0.5",
     "tsx": "^4.7.1",
     "typescript": "^5.4.5",
-    "vitest": "^1.4.0",
-    "@types/node": "^20.12.7"
+    "vitest": "^1.4.0"
   }
 }
