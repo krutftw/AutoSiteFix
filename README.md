@@ -3,111 +3,81 @@
 [![CI](https://github.com/krutftw/AutoSiteFix/actions/workflows/ci.yml/badge.svg)](https://github.com/krutftw/AutoSiteFix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-AutoSiteFix is an open-source Node.js CLI that audits, fixes, and documents web performance, accessibility, and SEO improvements. It combines Lighthouse, axe-core, and AST-based code transforms to deliver production-ready pull requests with clear reporting.
+## Project overview
 
-## Features
+AutoSiteFix is a Node.js CLI that audits websites, applies safe code fixes, and produces documentation quality reports. It orchestrates Lighthouse and axe-core scans across multiple pages, applies AST-driven code transforms, and can open pull requests that describe every improvement. Reports are written to disk so you can review performance, accessibility, and SEO changes before shipping them.
 
-- 🔦 Programmatic multi-page Lighthouse and axe-core audits with sitemap-style crawling
-- 🛠️ Safe, idempotent AST-based fixes for HTML, JSX/TSX, and blocking scripts
-- 📝 Beautiful HTML reports and structured JSON summaries saved to `autositefix-report/`
-- 🌳 Git-aware workflow that can stage commits and open pull requests with score summaries
-- 🧩 Modular TypeScript workspace spanning CLI, auditing, fixing, reporting, and git automation packages
-- 🪄 WordPress micro-plugin generator for sites that prefer theme-agnostic injections
+### Key capabilities
 
-## Monorepo layout
+- Crawl a sitemap-style list of pages starting from a single URL.
+- Run Lighthouse and axe-core against each page to produce score deltas.
+- Apply idempotent fixes to HTML, JSX/TSX, and script assets.
+- Generate HTML and JSON reports in `autositefix-report/`.
+- Prepare git branches, commits, and pull requests with audit summaries.
 
-```
-packages/
-  ai/        # Future AI-assisted recommendations (stub)
-  auditor/   # Lighthouse + axe-core integration utilities
-  cli/       # autositefix command-line entrypoint
-  fixer/     # AST-based code transforms and WordPress mode
-  git/       # Git/GitHub helpers for branches and PRs
-  report/    # Report generation utilities
-```
-
-## Getting started
+## Installation
 
 ### Prerequisites
 
-- Node.js 18.17+
-- npm 9+ (or any workspace-aware package manager)
+- Node.js 18.17 or later.
+- Git (required for branch automation and pull request creation).
 
-### Install
-
-```bash
-npm install
-```
-
-### Build the workspace
+### Steps
 
 ```bash
-npm run build
+corepack enable
+pnpm install
 ```
 
-### Run tests
+`corepack enable` ensures `pnpm` is available even if it is not installed globally. The workspace uses pnpm workspaces, so a single install fetches dependencies for every package in the monorepo.
 
-```bash
-npm test
-```
-
-## Quick start
-
-Run an audit and preview safe fixes with:
-
-```bash
-npx autositefix --url https://example.com --pages 5 --fix perf,a11y,seo --dry-run
-```
-
-The command crawls up to five internal pages, runs Lighthouse + axe-core, writes
-`autositefix-report/index.html`, and lists the fixes that would be applied. Remove
-`--dry-run` to write changes locally and optionally open a pull request.
-
-## CLI options
-
-| Flag | Description | Default |
-| ---- | ----------- | ------- |
-| `--url <string>` | Entry URL to audit | _required_ |
-| `--pages <number>` | Maximum number of pages to crawl | `5` |
-| `--fix <list>` | Comma-separated fix categories (perf, a11y, seo) | none |
-| `--dry-run` | Audit without writing changes or opening PRs | `false` |
-| `--provider <name>` | Optional provider for AI-assisted rationale | `local` |
-| `--wordpress` | Generate WordPress micro-plugin instead of direct edits | `false` |
-
-## Development scripts
+## Build and test
 
 | Command | Description |
-| ------- | ----------- |
-| `npm run lint` | Run ESLint across the workspace |
-| `npm run format` | Format code with Prettier |
-| `npm run format:check` | Verify formatting without modifying files |
-| `npm run typecheck` | Type-check all packages via project references |
-| `npm test` | Execute Vitest test suite |
+| --- | --- |
+| `pnpm build` | Compile all packages using the shared TypeScript project references. |
+| `pnpm test` | Run the Vitest suite for the entire workspace. |
+| `pnpm lint` | Execute ESLint checks across every package. |
+| `pnpm typecheck` | Verify types without emitting build artifacts. |
 
-## Roadmap
+Run these commands from the repository root. Always make sure `pnpm test` and `pnpm lint` pass before opening a pull request.
 
-- [x] Implement Lighthouse + axe-core auditor
-- [x] Wire CLI to auditing pipeline and reporting
-- [x] Add AST-based fixers for HTML, JSX/TSX, and scripts
-- [x] Automate git flow with branch, commit, and PR helpers
-- [x] Generate rich HTML reports and JSON summaries
-- [x] Add WordPress mode micro-plugin output
-- [ ] Integrate optional AI rationale via `packages/ai`
+## CLI usage
 
-## Optional: Codex CLI
-
-Prefer working with the Codex CLI?
+Once dependencies are installed you can run the CLI from the repository root. The following command crawls five pages starting from the home page, applies fixes, and writes reports:
 
 ```bash
-npm install -g @openai/codex
-codex login
-codex run autositefix --url https://example.com --dry-run
+pnpm autositefix --url https://example.com --pages 5 --fix perf,a11y,seo --dry-run
 ```
 
-## Contributing
+A successful execution prints a summary similar to:
 
-Contributions are welcome! Please open an issue or pull request to discuss your ideas. See the roadmap above for upcoming milestones.
+```
+✔ Audit complete (5 pages)
+✔ Reports written to autositefix-report/index.html
+ℹ Dry run: no files were modified. Re-run without --dry-run to apply fixes and open PRs.
+```
 
-## License
+Each run writes HTML and JSON artifacts beneath `autositefix-report/`. The HTML dashboard includes before/after scores and a detailed list of code changes the CLI would apply.
 
-AutoSiteFix is released under the [MIT License](./LICENSE).
+### GitHub authentication
+
+Pull request automation requires a `GITHUB_TOKEN` with `repo` scope in your environment. Export it before running any command that uses the PR features:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+```
+
+Without this token the CLI will skip PR creation but still generate local reports and apply fixes.
+
+## Contribution guidelines
+
+- **Branch naming:** create feature branches using `feature/<short-description>` or `fix/<short-description>` (e.g., `feature/report-tweaks`).
+- **Testing:** run `pnpm lint` and `pnpm test` locally before pushing changes.
+- **Pull requests:** include a summary of the audit/fixes performed and attach relevant report screenshots if the CLI produced them.
+- **Reports:** upload the generated `autositefix-report/` artifacts when possible so reviewers can verify improvements.
+
+## Additional resources
+
+- [MIT License](./LICENSE)
+- GitHub Actions CI badge above links to the current build status.
