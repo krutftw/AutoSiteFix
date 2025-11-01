@@ -1,0 +1,13 @@
+{
+  "name": "autositefix-auditor",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"(auditor tests TBD)\""
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
