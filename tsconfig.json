@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/cli" },
+    { "path": "packages/auditor" },
+    { "path": "packages/fixer" },
+    { "path": "packages/ai" },
+    { "path": "packages/git" },
+    { "path": "packages/report" }
+  ]
+}

@@ -1,154 +1,260 @@
-import fs from "node:fs";
-import path from "node:path";
-import puppeteer from "puppeteer";
-import type { Page } from "puppeteer";
-import axeSource from "axe-core";
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
-export type AuditResult = {
+import { AxePuppeteer } from '@axe-core/puppeteer';
+import { load as loadHtml } from 'cheerio';
+import chromeLauncher from 'chrome-launcher';
+import lighthouse, { Flags as LighthouseFlags, RunnerResult } from 'lighthouse';
+import pLimit from 'p-limit';
+import puppeteer, { Browser } from 'puppeteer';
+
+export interface AxeNodeSummary {
+  html: string;
+  target: string[];
+  failureSummary?: string;
+}
+
+export interface AxeViolationSummary {
+  id: string;
+  impact?: string | null;
+  description: string;
+  helpUrl: string;
+  nodes: AxeNodeSummary[];
+}
+
+export interface LighthouseScoreSummary {
+  performance: number;
+  accessibility: number;
+  seo: number;
+}
+
+export interface PageAuditResult {
   url: string;
-  title?: string;
-  axeViolations: {
-    id: string;
-    impact?: string | null;
-    description: string;
-    help: string;
-    helpUrl: string;
-    nodes: number;
-  }[];
-};
+  lighthouse: {
+    scores: LighthouseScoreSummary;
+    details: RunnerResult['lhr'];
+  };
+  axe: {
+    violations: AxeViolationSummary[];
+  };
+  fetchedAt: string;
+}
 
-export type AuditSummary = {
+export interface AuditOptions {
+  /** Starting URL for the crawl. */
+  url: string;
+  /** Maximum number of pages to audit. */
+  pages?: number;
+  /** Directory to write intermediate artifacts such as raw Lighthouse reports. */
+  artifactDir?: string;
+  /** Optional callback fired when a page starts or finishes auditing. */
+  onProgress?: (event: AuditProgressEvent) => void;
+  /** Optional timeout per page in milliseconds. */
+  timeout?: number;
+}
+
+export type AuditProgressEvent =
+  | { type: 'discover-start'; url: string }
+  | { type: 'discover-complete'; urls: string[] }
+  | { type: 'page-start'; url: string }
+  | { type: 'page-complete'; url: string }
+  | { type: 'error'; url: string; error: Error };
+
+export interface AuditRunResult {
+  pages: PageAuditResult[];
   startedAt: string;
-  pagesCrawled: number;
-  results: AuditResult[];
-};
-
-function normalizeUrl(u: string) {
-  try { return new URL(u).toString().replace(/#.*$/,""); } catch { return u; }
+  completedAt: string;
 }
 
-async function getPageTitle(page: Page) {
-  try { return await page.title(); } catch { return undefined; }
+interface DiscoverOptions {
+  startUrl: string;
+  limit: number;
+  timeout: number;
 }
 
-async function runAxe(page: Page) {
-  await page.addScriptTag({ content: axeSource.source });
-  const result = await page.evaluate(async () => {
-    // @ts-ignore
-    return await (window as any).axe.run({
-      runOnly: { type: "tag", values: ["wcag2a","wcag2aa","wcag21aa","section508"] },
-      resultTypes: ["violations"],
-    });
+const DEFAULT_TIMEOUT = 90_000;
+
+export async function runAudit(options: AuditOptions): Promise<AuditRunResult> {
+  const startedAt = new Date().toISOString();
+  const maxPages = Math.max(1, options.pages ?? 5);
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+
+  options.onProgress?.({ type: 'discover-start', url: options.url });
+  const urls = await discoverUrls({
+    startUrl: options.url,
+    limit: maxPages,
+    timeout
   });
-  return (result.violations || []).map((v: any) => ({
-    id: v.id,
-    impact: v.impact ?? null,
-    description: v.description,
-    help: v.help,
-    helpUrl: v.helpUrl,
-    nodes: (v.nodes || []).length,
-  }));
-}
+  options.onProgress?.({ type: 'discover-complete', urls });
 
-function isInternalLink(root: URL, href: string) {
-  try {
-    const u = new URL(href, root);
-    return u.origin === root.origin;
-  } catch { return false; }
-}
+  const artifactDir = options.artifactDir ?? path.resolve('autositefix-report/.artifacts');
+  await fs.mkdir(artifactDir, { recursive: true });
 
-async function discoverLinks(page: Page, root: URL): Promise<string[]> {
-  const hrefs = await page.$$eval("a[href]", (as) => as.map(a => (a as HTMLAnchorElement).getAttribute("href") || ""));
-  const urls = new Set<string>();
-  for (const href of hrefs) {
-    if (!href) continue;
+  const limit = pLimit(1);
+  const pages: PageAuditResult[] = [];
+
+  for (const url of urls) {
+    options.onProgress?.({ type: 'page-start', url });
     try {
-      const absolute = new URL(href, root).toString();
-      if (isInternalLink(root, absolute)) urls.add(absolute.replace(/#.*$/,""));
-    } catch {}
-  }
-  return Array.from(urls);
-}
-
-export async function runAudit(options: { url: string; pages: number }) {
-  const startUrl = new URL(options.url);
-  const maxPages = Math.max(1, options.pages || 5);
-  const visited = new Set<string>();
-  const queue: string[] = [normalizeUrl(startUrl.toString())];
-
-  const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox"] });
-  const page = await browser.newPage();
-
-  const results: AuditResult[] = [];
-  while (queue.length && visited.size < maxPages) {
-    const current = queue.shift()!;
-    if (visited.has(current)) continue;
-    visited.add(current);
-
-    try {
-      await page.goto(current, { waitUntil: "domcontentloaded", timeout: 45000 });
-      const title = await getPageTitle(page);
-      const axeViolations = await runAxe(page);
-      results.push({ url: current, title, axeViolations });
-
-      const links = await discoverLinks(page, startUrl);
-      for (const l of links) if (!visited.has(l) && queue.length < maxPages * 3) queue.push(l);
-    } catch (err) {
-      results.push({ url: current, title: undefined, axeViolations: [{
-        id: "navigation-error",
-        impact: "serious",
-        description: (err as Error).message ?? "Navigation error",
-        help: "Page failed to load",
-        helpUrl: "",
-        nodes: 0,
-      }]});
+      const result = await limit(() => auditSinglePage(url, artifactDir, timeout));
+      pages.push(result);
+      options.onProgress?.({ type: 'page-complete', url });
+    } catch (error) {
+      options.onProgress?.({
+        type: 'error',
+        url,
+        error: error instanceof Error ? error : new Error(String(error))
+      });
     }
   }
 
-  await browser.close();
-
-  const summary: AuditSummary = {
-    startedAt: new Date().toISOString(),
-    pagesCrawled: results.length,
-    results,
+  const completedAt = new Date().toISOString();
+  return {
+    pages,
+    startedAt,
+    completedAt
   };
+}
 
-  const outDir = path.resolve("autositefix-report");
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify(summary, null, 2));
+async function discoverUrls({ startUrl, limit, timeout }: DiscoverOptions): Promise<string[]> {
+  const initialUrl = new URL(startUrl);
+  const seen = new Set<string>();
+  const queue: string[] = [initialUrl.href];
+  const urls: string[] = [];
 
-  // very simple HTML report
-  const html = `<!doctype html>
-<html lang="en"><meta charset="utf-8"/>
-<title>AutoSiteFix Report</title>
-<style>
- body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:24px;line-height:1.4}
- h1{margin:0 0 12px} .url{font-weight:600}
- .violation{border:1px solid #ddd;padding:10px;border-radius:8px;margin:8px 0}
- .impact{padding:2px 6px;border-radius:6px;background:#eee;font-size:12px}
- .impact.serious{background:#ffe1e1}
- .impact.moderate{background:#fff3cd}
- .impact.minor{background:#e7f3ff}
- code{background:#f6f8fa;padding:2px 4px;border-radius:4px}
-</style>
-<h1>AutoSiteFix Report</h1>
-<p>Started: <code>${summary.startedAt}</code></p>
-<p>Pages scanned: <strong>${summary.pagesCrawled}</strong></p>
-${results.map(r => `
-<section>
-  <div class="url">${r.title ? r.title + " — " : ""}<a href="${r.url}">${r.url}</a></div>
-  <div>Violations: <strong>${r.axeViolations.length}</strong></div>
-  ${r.axeViolations.map(v => `
-   <div class="violation">
-     <div><span class="impact ${v.impact ?? ""}">${v.impact ?? "n/a"}</span> <strong>${v.id}</strong> — ${v.help}</div>
-     <div>${v.description}</div>
-     ${v.helpUrl ? `<div><a href="${v.helpUrl}">${v.helpUrl}</a></div>` : ""}
-     <div>Affected nodes: ${v.nodes}</div>
-   </div>
-  `).join("")}
-</section>`).join("")}
-</html>`;
-  fs.writeFileSync(path.join(outDir, "index.html"), html, "utf-8");
+  while (queue.length > 0 && urls.length < limit) {
+    const current = queue.shift();
+    if (!current || seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    urls.push(current);
 
-  return { outDir, summary };
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const response = await fetch(current, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok || response.headers.get('content-type')?.includes('text/html') !== true) {
+        continue;
+      }
+
+      const body = await response.text();
+      const $ = loadHtml(body);
+      $('a[href]')
+        .toArray()
+        .forEach((element) => {
+          const href = $(element).attr('href');
+          if (!href) return;
+
+          try {
+            const resolved = new URL(href, current);
+            if (resolved.origin !== initialUrl.origin) {
+              return;
+            }
+            const normalized = normalizeUrl(resolved);
+            if (!seen.has(normalized) && !queue.includes(normalized) && urls.length + queue.length < limit * 3) {
+              queue.push(normalized);
+            }
+          } catch (error) {
+            // Ignore malformed URLs.
+            void error;
+          }
+        });
+    } catch (error) {
+      // Ignore fetch errors and continue crawling.
+      void error;
+    }
+  }
+
+  return urls.slice(0, limit);
+}
+
+function normalizeUrl(url: URL): string {
+  url.hash = '';
+  if (url.pathname.endsWith('/')) {
+    url.pathname = url.pathname.slice(0, -1) || '/';
+  }
+  return url.href;
+}
+
+async function auditSinglePage(url: string, artifactDir: string, timeout: number): Promise<PageAuditResult> {
+  const chrome = await chromeLauncher.launch({
+    chromeFlags: ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage']
+  });
+
+  let browser: Browser | undefined;
+
+  try {
+    browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${chrome.port}` });
+
+    const lighthouseFlags: LighthouseFlags = {
+      port: chrome.port,
+      output: 'json',
+      logLevel: 'error'
+    };
+
+    const runner = await lighthouse(url, lighthouseFlags);
+    if (!runner?.lhr) {
+      throw new Error('Failed to obtain Lighthouse results');
+    }
+
+    const page = await browser.newPage();
+    await page.setDefaultNavigationTimeout(timeout);
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    const axe = await new AxePuppeteer(page).analyze();
+    await page.close();
+
+    const lighthouseArtifactPath = path.join(
+      artifactDir,
+      `${encodeURIComponent(url)}-lighthouse.json`
+    );
+    await fs.writeFile(lighthouseArtifactPath, JSON.stringify(runner.lhr, null, 2), 'utf8');
+
+    const violations: AxeViolationSummary[] = axe.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      description: violation.description,
+      helpUrl: violation.helpUrl,
+      nodes: violation.nodes.map((node) => ({
+        html: node.html,
+        target: Array.isArray(node.target)
+          ? node.target.map((value) => value.toString())
+          : [],
+        failureSummary: node.failureSummary ?? undefined
+      }))
+    }));
+
+    return {
+      url,
+      lighthouse: {
+        scores: extractScores(runner),
+        details: runner.lhr
+      },
+      axe: {
+        violations
+      },
+      fetchedAt: new Date().toISOString()
+    };
+  } finally {
+    await browser?.close().catch(() => undefined);
+    try {
+      await chrome.kill();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function extractScores(runner: RunnerResult): LighthouseScoreSummary {
+  const performance = (runner.lhr.categories.performance?.score ?? 0) * 100;
+  const accessibility = (runner.lhr.categories.accessibility?.score ?? 0) * 100;
+  const seo = (runner.lhr.categories.seo?.score ?? 0) * 100;
+
+  return {
+    performance: Math.round(performance),
+    accessibility: Math.round(accessibility),
+    seo: Math.round(seo)
+  };
 }
