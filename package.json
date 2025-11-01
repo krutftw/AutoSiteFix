@@ -5,13 +5,13 @@
   "description": "AutoSiteFix monorepo for auditing and automated web optimizations.",
   "license": "MIT",
   "scripts": {
-    "build": "tsc -b",
+    "build": "pnpm -r build",
     "clean": "rimraf dist",
     "lint": "eslint \"**/*.{ts,tsx}\" --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest",
-    "typecheck": "tsc -b"
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
   },
   "workspaces": [
     "packages/*"
