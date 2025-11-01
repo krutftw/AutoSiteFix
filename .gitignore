@@ -58,5 +58,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# AutoSiteFix artifacts
-autositefix-report/
+# Python
+__pycache__/
+*.py[cod]
