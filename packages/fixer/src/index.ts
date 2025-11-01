@@ -3,15 +3,15 @@ import path from 'node:path';
 
 import { parse } from '@babel/parser';
 import type { ParserPlugin } from '@babel/parser';
-import generate from '@babel/generator';
-import traverse, { NodePath } from '@babel/traverse';
+import generator from '@babel/generator';
+import traverseModule, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import fg from 'fast-glob';
 import { unified } from 'unified';
 import rehypeParse from 'rehype-parse';
 import rehypeStringify from 'rehype-stringify';
 import { visit } from 'unist-util-visit';
-import type { Element, Properties, Root } from 'hast';
+import type { Element, ElementContent, Properties, Root } from 'hast';
 
 export type FixCategory = 'perf' | 'a11y' | 'seo';
 
@@ -44,6 +44,21 @@ interface TransformOutcome {
   code: string;
   actions: string[];
 }
+
+type GeneratorFunction = typeof import('@babel/generator')['default'];
+type TraverseFunction = typeof import('@babel/traverse')['default'];
+
+const generatorModule = generator as { default?: GeneratorFunction };
+const traverseModuleNamespace = traverseModule as { default?: TraverseFunction };
+
+const generateAst: GeneratorFunction =
+  typeof generatorModule.default === 'function'
+    ? generatorModule.default
+    : (generator as unknown as GeneratorFunction);
+const traverseAst: TraverseFunction =
+  typeof traverseModuleNamespace.default === 'function'
+    ? traverseModuleNamespace.default
+    : (traverseModule as unknown as TraverseFunction);
 
 const DEFAULT_PATTERNS = [
   '**/*.html',
@@ -324,14 +339,15 @@ function hasHeadElement(
   attribute: string,
   value: string
 ): boolean {
-  return (node.children ?? []).some((child) => {
+  return (node.children ?? []).some((child: ElementContent): boolean => {
     if (child.type !== 'element') {
       return false;
     }
-    if (child.tagName !== tagName) {
+    const element = child as Element;
+    if (element.tagName !== tagName) {
       return false;
     }
-    const props = child.properties ?? {};
+    const props = element.properties ?? {};
     const propValue = props[attribute];
     if (Array.isArray(propValue)) {
       return propValue.some((entry) => String(entry).toLowerCase() === value.toLowerCase());
@@ -365,7 +381,7 @@ function transformJsx(
   const actions = new Set<string>();
   const headElements: NodePath<t.JSXElement>[] = [];
 
-  traverse(ast, {
+  traverseAst(ast, {
     JSXElement(path: NodePath<t.JSXElement>) {
       const opening = path.node.openingElement;
       const tagName = getJsxTagName(opening.name);
@@ -397,7 +413,7 @@ function transformJsx(
     return undefined;
   }
 
-  const output = generate(ast, { retainLines: true }, source);
+  const output = generateAst(ast, { retainLines: true }, source);
   return { code: output.code, actions: Array.from(actions) };
 }
 

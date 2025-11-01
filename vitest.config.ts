@@ -12,6 +12,8 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const resolvePackage = (pkg: string) =>
   path.resolve(rootDir, 'packages', pkg, 'src', 'index.ts');
 
+const require = createRequire(import.meta.url);
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -30,6 +32,14 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'lcov'],
       provider: 'v8'
+    }
+  },
+  resolve: {
+    alias: {
+      '@babel/parser': require.resolve('@babel/parser'),
+      '@babel/traverse': require.resolve('@babel/traverse'),
+      '@babel/generator': require.resolve('@babel/generator'),
+      '@babel/types': require.resolve('@babel/types')
     }
   }
 });

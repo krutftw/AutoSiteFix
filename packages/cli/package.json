@@ -2,21 +2,31 @@
   "name": "@autositefix/cli",
   "version": "0.1.0",
   "description": "Command line interface for AutoSiteFix.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "bin": {
     "autositefix": "dist/index.js"
   },
-  "type": "commonjs",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
-    "clean": "rimraf dist"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@autositefix/auditor": "0.1.0",
-    "@autositefix/fixer": "0.1.0",
-    "@autositefix/git": "0.1.0",
-    "@autositefix/report": "0.1.0",
+    "@autositefix/auditor": "workspace:*",
+    "@autositefix/fixer": "workspace:*",
+    "@autositefix/git": "workspace:*",
+    "@autositefix/report": "workspace:*",
     "yargs": "^17.7.2"
   }
 }
