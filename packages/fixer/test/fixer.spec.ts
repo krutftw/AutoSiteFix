@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { applyFixes, generateWordPressPlugin } from '../src/index';
+import { applyFixes, generateWordPressPlugin } from '../dist/index.js';
 
 const tempDirs: string[] = [];
 

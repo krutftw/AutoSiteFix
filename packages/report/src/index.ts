@@ -51,10 +51,10 @@ export function summarize(pages: PageAuditResult[]): SummaryMetrics {
 
   const totals = pages.reduce(
     (acc, page) => {
-      acc.performance += page.lighthouse.scores.performance;
-      acc.accessibility += page.lighthouse.scores.accessibility;
-      acc.seo += page.lighthouse.scores.seo;
-      acc.violations += page.axe.violations.length;
+      acc.performance += page.performance.score;
+      acc.accessibility += page.accessibility.score;
+      acc.seo += page.seo.score;
+      acc.violations += page.accessibility.violations.length;
       return acc;
     },
     { performance: 0, accessibility: 0, seo: 0, violations: 0 }
@@ -71,7 +71,7 @@ export function summarize(pages: PageAuditResult[]): SummaryMetrics {
 function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title?: string): string {
   const pageRows = result.pages
     .map((page) => {
-      const violations = page.axe.violations
+      const violations = page.accessibility.violations
         .map(
           (violation) =>
             `<li><strong>${escapeHtml(violation.id)}</strong> – ${escapeHtml(violation.description)} (${escapeHtml(
@@ -80,21 +80,45 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
         )
         .join('');
 
+      const seoIssues = page.seo.issues
+        .map((issue) => `<li>${escapeHtml(issue)}</li>`)
+        .join('');
+
+      const performanceDetails = [
+        `FCP: ${formatTiming(page.performance.metrics.firstContentfulPaint)}`,
+        `LCP: ${formatTiming(page.performance.metrics.largestContentfulPaint)}`,
+        `DOMContentLoaded: ${formatTiming(page.performance.metrics.domContentLoaded)}`,
+        `DOM interactive: ${formatTiming(page.performance.metrics.domInteractive)}`
+      ].join(' \u2022 ');
+
       return `
         <tr>
           <td><a href="${escapeAttribute(page.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
         page.url
       )}</a></td>
-          <td>${page.lighthouse.scores.performance}</td>
-          <td>${page.lighthouse.scores.accessibility}</td>
-          <td>${page.lighthouse.scores.seo}</td>
-          <td>${page.axe.violations.length}</td>
+          <td>${page.performance.score}</td>
+          <td>${page.accessibility.score}</td>
+          <td>${page.seo.score}</td>
+          <td>${page.accessibility.violations.length}</td>
         </tr>
-        <tr class="violations">
+        <tr class="details">
           <td colspan="5">
             <details>
-              <summary>View accessibility issues</summary>
-              <ul>${violations || '<li>No issues found 🎉</li>'}</ul>
+              <summary>View audit details</summary>
+              <div class="details-grid">
+                <section>
+                  <h3>Performance</h3>
+                  <p>${performanceDetails}</p>
+                </section>
+                <section>
+                  <h3>SEO</h3>
+                  <ul>${seoIssues || '<li>All configured checks passed 🎉</li>'}</ul>
+                </section>
+                <section>
+                  <h3>Accessibility</h3>
+                  <ul>${violations || '<li>No issues found 🎉</li>'}</ul>
+                </section>
+              </div>
             </details>
           </td>
         </tr>
@@ -102,8 +126,8 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
     })
     .join('');
 
-  const tableBody = pageRows ||
-    `<tr><td colspan="5">No pages were audited. Please verify the URL and try again.</td></tr>`;
+  const tableBody =
+    pageRows || `<tr><td colspan="5">No pages were audited. Please verify the URL and try again.</td></tr>`;
 
   return `<!doctype html>
   <html lang="en">
@@ -157,7 +181,7 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
         tbody tr:nth-child(even) {
           background: rgba(30, 64, 175, 0.25);
         }
-        tbody tr.violations td {
+        tbody tr.details td {
           background: rgba(15, 23, 42, 0.55);
         }
         details {
@@ -190,6 +214,19 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
           margin-top: 0.4rem;
           font-size: 1.7rem;
           color: #f8fafc;
+        }
+        .details-grid {
+          display: grid;
+          gap: 1rem;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          margin-top: 1rem;
+        }
+        .details-grid h3 {
+          margin-top: 0;
+          font-size: 1rem;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: #94a3b8;
         }
         footer {
           margin-top: 2.5rem;
@@ -266,4 +303,11 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function formatTiming(value: number | null): string {
+  if (value == null) {
+    return '—';
+  }
+  return `${(value / 1000).toFixed(2)}s`;
 }

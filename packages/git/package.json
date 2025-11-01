@@ -2,17 +2,27 @@
   "name": "@autositefix/git",
   "version": "0.1.0",
   "description": "Git and GitHub integration for AutoSiteFix.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "type": "commonjs",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
-    "clean": "rimraf dist"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@autositefix/auditor": "0.1.0",
-    "@autositefix/fixer": "0.1.0",
-    "@autositefix/report": "0.1.0",
+    "@autositefix/auditor": "workspace:*",
+    "@autositefix/fixer": "workspace:*",
+    "@autositefix/report": "workspace:*",
     "@octokit/rest": "^20.1.1",
     "simple-git": "^3.22.0"
   }
