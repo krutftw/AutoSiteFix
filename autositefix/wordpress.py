@@ -32,16 +32,19 @@ add_filter('the_content', 'autositefix_the_content_stub');
 """
 
 
-def generate_wordpress_plugin(base_directory: Path) -> Path:
+def generate_wordpress_plugin(base_directory: Path | str) -> Path:
     """Generate the WordPress fixes plugin stub.
 
     Args:
-        base_directory: Base directory where the wp-content tree should be created.
+        base_directory: Base directory (as a :class:`pathlib.Path` or str) where the
+            wp-content tree should be created.
 
     Returns:
         Path to the generated plugin directory.
     """
-    plugin_directory = base_directory / PLUGIN_RELATIVE_PATH
+    base_path = Path(base_directory)
+
+    plugin_directory = base_path / PLUGIN_RELATIVE_PATH
     plugin_directory.mkdir(parents=True, exist_ok=True)
 
     plugin_file = plugin_directory / PLUGIN_MAIN_FILE
