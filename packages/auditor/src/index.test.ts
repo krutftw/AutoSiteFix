@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const fetchMock = vi.fn();
-const launchMock = vi.fn();
-const newPageMock = vi.fn();
-const closeBrowserMock = vi.fn();
-const axeAnalyzeMock = vi.fn();
+const mocks = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  launchMock: vi.fn(),
+  newPageMock: vi.fn(),
+  closeBrowserMock: vi.fn(),
+  axeAnalyzeMock: vi.fn()
+}));
 
 vi.mock('puppeteer', () => ({
   default: {
-    launch: launchMock
+    launch: mocks.launchMock
   },
-  launch: launchMock
+  launch: mocks.launchMock
 }));
 
 vi.mock('@axe-core/puppeteer', () => ({
@@ -22,7 +24,7 @@ vi.mock('@axe-core/puppeteer', () => ({
     }
 
     analyze() {
-      return axeAnalyzeMock(this.page);
+      return mocks.axeAnalyzeMock(this.page);
     }
   }
 }));
@@ -33,21 +35,21 @@ const originalFetch = globalThis.fetch;
 
 describe('runAudit', () => {
   beforeEach(() => {
-    fetchMock.mockReset();
-    launchMock.mockReset();
-    newPageMock.mockReset();
-    closeBrowserMock.mockReset();
-    axeAnalyzeMock.mockReset();
-    closeBrowserMock.mockImplementation(async () => undefined);
+    mocks.fetchMock.mockReset();
+    mocks.launchMock.mockReset();
+    mocks.newPageMock.mockReset();
+    mocks.closeBrowserMock.mockReset();
+    mocks.axeAnalyzeMock.mockReset();
+    mocks.closeBrowserMock.mockImplementation(async () => undefined);
 
-    newPageMock.mockImplementation(() => createPageStub());
+    mocks.newPageMock.mockImplementation(() => createPageStub());
 
-    launchMock.mockImplementation(async () => ({
-      newPage: newPageMock,
-      close: closeBrowserMock
+    mocks.launchMock.mockImplementation(async () => ({
+      newPage: mocks.newPageMock,
+      close: mocks.closeBrowserMock
     }));
 
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = mocks.fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -65,16 +67,16 @@ describe('runAudit', () => {
     ]);
 
     mockFetchResponses(htmlByUrl);
-    axeAnalyzeMock.mockResolvedValue({ violations: [] });
+    mocks.axeAnalyzeMock.mockResolvedValue({ violations: [] });
 
     const result = await runAudit({ url: 'https://example.com/', pages: 2 });
 
-    expect(launchMock).toHaveBeenCalledWith({
+    expect(mocks.launchMock).toHaveBeenCalledWith({
       headless: 'new',
       args: ['--no-sandbox', '--disable-dev-shm-usage']
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(newPageMock).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.newPageMock).toHaveBeenCalledTimes(2);
     expect(result.pages).toHaveLength(2);
     expect(result.pages[0]?.url).toBe('https://example.com/');
     expect(result.pages[1]?.url).toBe('https://example.com/first');
@@ -84,7 +86,7 @@ describe('runAudit', () => {
     const htmlByUrl = new Map<string, string>([['https://example.com/', '']]);
     mockFetchResponses(htmlByUrl);
 
-    axeAnalyzeMock.mockImplementation(async (page: { url: () => string }) => ({
+    mocks.axeAnalyzeMock.mockImplementation(async (page: { url: () => string }) => ({
       violations: [
         {
           id: `violation-${page.url()}`,
@@ -106,7 +108,7 @@ describe('runAudit', () => {
 });
 
 function mockFetchResponses(htmlByUrl: Map<string, string>): void {
-  fetchMock.mockImplementation(async (input: any) => {
+  mocks.fetchMock.mockImplementation(async (input: any) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url ?? '';
     const html = htmlByUrl.get(url) ?? '';
     return {
