@@ -31,6 +31,45 @@ export interface FinalizePullRequestOptions {
   title?: string;
 }
 
+export interface OpenPullRequestOptions {
+  owner: string;
+  repo: string;
+  head: string;
+  base: string;
+  title: string;
+  body: string;
+}
+
+export async function createBranch(name: string): Promise<void> {
+  const git = simpleGit();
+  const root = await git.revparse(['--show-toplevel']);
+  git.cwd(root);
+
+  const branches = await git.branch();
+  if (branches.all.includes(name)) {
+    await git.checkout(name);
+    return;
+  }
+
+  await git.checkoutLocalBranch(name);
+}
+
+export async function commitAll(message: string): Promise<void> {
+  const git = simpleGit();
+  const root = await git.revparse(['--show-toplevel']);
+  git.cwd(root);
+
+  await git.add(['.']);
+  const status = await git.status();
+
+  if (status.staged.length === 0) {
+    console.warn('No changes to commit.');
+    return;
+  }
+
+  await git.commit(message);
+}
+
 export async function prepareRepository(
   options: PrepareRepositoryOptions = {}
 ): Promise<GitRepositoryContext> {
@@ -115,6 +154,25 @@ export async function finalizePullRequest(options: FinalizePullRequestOptions): 
     base: baseBranch,
     title,
     body
+  });
+}
+
+export async function openPullRequest(options: OpenPullRequestOptions): Promise<void> {
+  const token = process.env.GITHUB_TOKEN;
+
+  if (!token) {
+    console.warn('Skipping PR creation: missing GitHub token.');
+    return;
+  }
+
+  const octokit = new Octokit({ auth: token });
+  await octokit.pulls.create({
+    owner: options.owner,
+    repo: options.repo,
+    head: options.head,
+    base: options.base,
+    title: options.title,
+    body: options.body
   });
 }
 

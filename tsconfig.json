@@ -1,4 +1,10 @@
 {
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "declaration": false,
+    "noEmit": true
+  },
   "files": [],
   "references": [
     { "path": "packages/cli" },
