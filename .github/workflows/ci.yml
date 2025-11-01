@@ -16,14 +16,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: npm run typecheck
+        run: pnpm -w typecheck
 
-      - name: Run tests
-        run: npm test
+      - name: Build
+        run: pnpm -w build
+
+      - name: Test
+        run: pnpm -w test
