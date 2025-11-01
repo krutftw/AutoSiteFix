@@ -1,0 +1,20 @@
+{
+  "name": "@autositefix/auditor",
+  "version": "0.1.0",
+  "description": "Auditing utilities for AutoSiteFix.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@axe-core/puppeteer": "^4.7.3",
+    "cheerio": "^1.0.0-rc.12",
+    "chrome-launcher": "^0.15.2",
+    "lighthouse": "^11.7.1",
+    "p-limit": "^5.0.0",
+    "puppeteer": "^22.10.0"
+  }
+}

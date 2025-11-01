@@ -1,0 +1,22 @@
+{
+  "name": "@autositefix/cli",
+  "version": "0.1.0",
+  "description": "Command line interface for AutoSiteFix.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "autositefix": "dist/index.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@autositefix/auditor": "0.1.0",
+    "@autositefix/fixer": "0.1.0",
+    "@autositefix/git": "0.1.0",
+    "@autositefix/report": "0.1.0",
+    "yargs": "^17.7.2"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@autositefix/ai",
+  "version": "0.1.0",
+  "description": "AI helpers for AutoSiteFix (stub).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {}
+}
