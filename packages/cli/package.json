@@ -13,10 +13,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@autositefix/auditor": "0.1.0",
-    "@autositefix/fixer": "0.1.0",
-    "@autositefix/git": "0.1.0",
-    "@autositefix/report": "0.1.0",
+    "@autositefix/auditor": "file:../auditor",
+    "@autositefix/fixer": "file:../fixer",
+    "@autositefix/git": "file:../git",
+    "@autositefix/report": "file:../report",
     "yargs": "^17.7.2"
   }
 }

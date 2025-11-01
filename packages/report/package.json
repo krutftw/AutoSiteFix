@@ -10,6 +10,13 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@autositefix/auditor": "0.1.0"
+    "@autositefix/auditor": "file:../auditor"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./src/index.ts",
+      "require": "./dist/index.js"
+    }
   }
 }

@@ -2,11 +2,11 @@ import process from 'node:process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
-import { runAudit } from '@autositefix/auditor';
-import type { AuditProgressEvent, AuditRunResult } from '@autositefix/auditor';
+import { persistAuditArtifacts, runAudit } from '@autositefix/auditor';
+import type { AuditProgressEvent } from '@autositefix/auditor';
 import { applyFixes, FixCategory, FixExecutionResult, generateWordPressPlugin } from '@autositefix/fixer';
 import { finalizePullRequest, prepareRepository } from '@autositefix/git';
-import { summarize, writeReport } from '@autositefix/report';
+import { summarize } from '@autositefix/report';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
@@ -48,8 +48,10 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   });
 
   const summary = summarize(audit.pages);
-  const locations = await writeReport(audit, { title: `AutoSiteFix report for ${args.url}` });
-  renderSummary(audit, summary, locations.html);
+  const locations = await persistAuditArtifacts(audit, {
+    title: `AutoSiteFix report for ${args.url}`
+  });
+  renderSummary(summary, locations.html ?? locations.json);
 
   let fixResult: FixExecutionResult | undefined;
 
@@ -181,19 +183,14 @@ function handleProgress(event: AuditProgressEvent): void {
   }
 }
 
-function renderSummary(
-  result: AuditRunResult,
-  summary: ReturnType<typeof summarize>,
-  htmlReportPath: string
-): void {
+function renderSummary(summary: ReturnType<typeof summarize>, reportPath: string): void {
   console.log('\n' + colors.bold('Audit summary'));
   console.log('='.repeat(40));
-  console.log(`Pages audited: ${result.pages.length}`);
-  console.log(`Average performance: ${summary.averagePerformance}`);
-  console.log(`Average accessibility: ${summary.averageAccessibility}`);
-  console.log(`Average SEO: ${summary.averageSeo}`);
+  console.log(`Pages audited: ${summary.totalPages}`);
+  console.log(`Pages with violations: ${summary.pagesWithViolations}`);
   console.log(`Total axe violations: ${summary.totalViolations}`);
-  console.log(colors.gray(`Detailed report saved to ${htmlReportPath}`));
+  console.log(`Average violations per page: ${summary.averageViolations.toFixed(2)}`);
+  console.log(colors.gray(`Detailed report saved to ${reportPath}`));
 }
 
 async function promptYesNo(question: string): Promise<boolean> {

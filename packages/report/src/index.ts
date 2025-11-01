@@ -14,10 +14,10 @@ export interface ReportOptions {
 }
 
 export interface SummaryMetrics {
-  averagePerformance: number;
-  averageAccessibility: number;
-  averageSeo: number;
+  totalPages: number;
+  pagesWithViolations: number;
   totalViolations: number;
+  averageViolations: number;
 }
 
 export async function writeReport(
@@ -42,29 +42,30 @@ export async function writeReport(
 export function summarize(pages: PageAuditResult[]): SummaryMetrics {
   if (pages.length === 0) {
     return {
-      averagePerformance: 0,
-      averageAccessibility: 0,
-      averageSeo: 0,
-      totalViolations: 0
+      totalPages: 0,
+      pagesWithViolations: 0,
+      totalViolations: 0,
+      averageViolations: 0
     };
   }
 
   const totals = pages.reduce(
     (acc, page) => {
-      acc.performance += page.lighthouse.scores.performance;
-      acc.accessibility += page.lighthouse.scores.accessibility;
-      acc.seo += page.lighthouse.scores.seo;
-      acc.violations += page.axe.violations.length;
+      const violations = page.axe.violations?.length ?? 0;
+      acc.totalViolations += violations;
+      if (violations > 0) {
+        acc.pagesWithViolations += 1;
+      }
       return acc;
     },
-    { performance: 0, accessibility: 0, seo: 0, violations: 0 }
+    { totalViolations: 0, pagesWithViolations: 0 }
   );
 
   return {
-    averagePerformance: Math.round(totals.performance / pages.length),
-    averageAccessibility: Math.round(totals.accessibility / pages.length),
-    averageSeo: Math.round(totals.seo / pages.length),
-    totalViolations: totals.violations
+    totalPages: pages.length,
+    pagesWithViolations: totals.pagesWithViolations,
+    totalViolations: totals.totalViolations,
+    averageViolations: totals.totalViolations / pages.length
   };
 }
 
@@ -85,13 +86,12 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
           <td><a href="${escapeAttribute(page.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
         page.url
       )}</a></td>
-          <td>${page.lighthouse.scores.performance}</td>
-          <td>${page.lighthouse.scores.accessibility}</td>
-          <td>${page.lighthouse.scores.seo}</td>
+          <td>${page.metadata.status ?? 'n/a'}</td>
+          <td>${escapeHtml(page.metadata.title ?? 'Untitled')}</td>
           <td>${page.axe.violations.length}</td>
         </tr>
         <tr class="violations">
-          <td colspan="5">
+          <td colspan="4">
             <details>
               <summary>View accessibility issues</summary>
               <ul>${violations || '<li>No issues found 🎉</li>'}</ul>
@@ -103,7 +103,7 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
     .join('');
 
   const tableBody = pageRows ||
-    `<tr><td colspan="5">No pages were audited. Please verify the URL and try again.</td></tr>`;
+    `<tr><td colspan="4">No pages were audited. Please verify the URL and try again.</td></tr>`;
 
   return `<!doctype html>
   <html lang="en">
@@ -207,20 +207,20 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
 
         <div class="summary-grid">
           <div class="summary-card">
-            <h2>Performance</h2>
-            <strong>${summary.averagePerformance}</strong>
+            <h2>Total Pages</h2>
+            <strong>${summary.totalPages}</strong>
           </div>
           <div class="summary-card">
-            <h2>Accessibility</h2>
-            <strong>${summary.averageAccessibility}</strong>
+            <h2>Pages with Violations</h2>
+            <strong>${summary.pagesWithViolations}</strong>
           </div>
           <div class="summary-card">
-            <h2>SEO</h2>
-            <strong>${summary.averageSeo}</strong>
-          </div>
-          <div class="summary-card">
-            <h2>Axe Violations</h2>
+            <h2>Total Violations</h2>
             <strong>${summary.totalViolations}</strong>
+          </div>
+          <div class="summary-card">
+            <h2>Average Violations</h2>
+            <strong>${summary.averageViolations.toFixed(2)}</strong>
           </div>
         </div>
 
@@ -228,9 +228,8 @@ function renderHtmlReport(result: AuditRunResult, summary: SummaryMetrics, title
           <thead>
             <tr>
               <th>URL</th>
-              <th>Performance</th>
-              <th>Accessibility</th>
-              <th>SEO</th>
+              <th>Status</th>
+              <th>Title</th>
               <th>Violations</th>
             </tr>
           </thead>

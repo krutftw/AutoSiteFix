@@ -124,17 +124,17 @@ function buildPullRequestBody(options: FinalizePullRequestOptions): string {
     .map((detail) => `- \`${detail.file}\` — ${detail.actions.join(', ')}`)
     .join('\n');
 
-  const averageScores = `| Metric | Score |\n| --- | --- |\n| Performance | ${summary.averagePerformance} |\n| Accessibility | ${summary.averageAccessibility} |\n| SEO | ${summary.averageSeo} |\n| Axe Violations | ${summary.totalViolations} |`;
+  const summaryTable = `| Metric | Value |\n| --- | --- |\n| Pages audited | ${summary.totalPages} |\n| Pages with violations | ${summary.pagesWithViolations} |\n| Total accessibility violations | ${summary.totalViolations} |\n| Average violations per page | ${summary.averageViolations.toFixed(2)} |`;
 
   const artifactNote = audit.pages
-    .map((page) => `- ${page.url} (perf: ${page.lighthouse.scores.performance}, a11y: ${page.lighthouse.scores.accessibility}, seo: ${page.lighthouse.scores.seo})`)
+    .map((page) => `- ${page.url} — ${page.axe.violations.length} violation(s)`)
     .join('\n');
 
   const fixesApplied = fixes.fixesApplied.length
     ? fixes.fixesApplied.map((item) => `- ${item}`).join('\n')
     : '- Automated fixes applied';
 
-  return `## Summary\n\n${fixesApplied}\n\n## Lighthouse & axe overview\n\n${averageScores}\n\nAudited pages:\n${artifactNote}\n\n## File changes\n\n${fileList || 'No direct file changes recorded.'}\n`;
+  return `## Summary\n\n${fixesApplied}\n\n## Accessibility overview\n\n${summaryTable}\n\nAudited pages:\n${artifactNote || '- No pages were audited.'}\n\n## File changes\n\n${fileList || 'No direct file changes recorded.'}\n`;
 }
 
 function parseRemote(remoteUrl: string): { owner: string; repo: string } | undefined {
