@@ -1,10 +1,21 @@
-import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
 
-const require = createRequire(import.meta.url);
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+const resolvePackage = (pkg: string) =>
+  path.resolve(rootDir, 'packages', pkg, 'src', 'index.ts');
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@autositefix/auditor': resolvePackage('auditor'),
+      '@autositefix/report': resolvePackage('report'),
+      '@autositefix/git': resolvePackage('git'),
+      '@autositefix/fixer': resolvePackage('fixer')
+    }
+  },
   test: {
     globals: true,
     environment: 'node',
