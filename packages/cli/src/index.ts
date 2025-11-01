@@ -5,7 +5,7 @@ import process from 'node:process';
 import { runAudit } from '@autositefix/auditor';
 import type { FixExecutionResult } from '@autositefix/fixer';
 import { finalizePullRequest, prepareRepository } from '@autositefix/git';
-import { summarize, writeReport } from '@autositefix/report';
+import { summarize } from '@autositefix/report';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
