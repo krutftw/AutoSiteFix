@@ -1,5 +1,27 @@
 {
-"extends": "../../tsconfig.base.json",
-"compilerOptions": { "outDir": "dist" },
-"include": ["src"]
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../auditor"
+    },
+    {
+      "path": "../fixer"
+    },
+    {
+      "path": "../git"
+    },
+    {
+      "path": "../report"
+    },
+    {
+      "path": "../ai"
+    }
+  ]
 }

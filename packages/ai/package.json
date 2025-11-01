@@ -1,7 +1,7 @@
 {
-  "name": "@autositefix/report",
+  "name": "@autositefix/ai",
   "version": "0.1.0",
-  "description": "Reporting utilities for AutoSiteFix.",
+  "description": "AI helpers for AutoSiteFix (stub).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
@@ -9,7 +9,5 @@
     "build": "tsc -b",
     "clean": "rimraf dist"
   },
-  "dependencies": {
-    "@autositefix/auditor": "0.1.0"
-  }
+  "dependencies": {}
 }

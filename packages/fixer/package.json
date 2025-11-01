@@ -1,11 +1,23 @@
 {
-"name": "autositefix-fixer",
-"version": "0.1.0",
-"type": "module",
-"scripts": {
-"build": "tsc -p tsconfig.json",
-"typecheck": "tsc -p tsconfig.json --noEmit",
-"test": "echo "(fixer tests TBD)""
-},
-"devDependencies": { "typescript": "^5.6.3" }
+  "name": "@autositefix/fixer",
+  "version": "0.1.0",
+  "description": "Code transformation utilities for AutoSiteFix.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.24.5",
+    "@babel/parser": "^7.24.5",
+    "@babel/traverse": "^7.24.5",
+    "@babel/types": "^7.24.5",
+    "fast-glob": "^3.3.2",
+    "rehype-parse": "^9.0.0",
+    "rehype-stringify": "^10.0.0",
+    "unified": "^11.0.4",
+    "unist-util-visit": "^5.0.0"
+  }
 }

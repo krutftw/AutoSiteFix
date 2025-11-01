@@ -1,33 +1,39 @@
 {
-  "name": "autositelist",
+  "name": "autositefix",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@10.7.0",
+  "description": "AutoSiteFix monorepo for auditing and automated web optimizations.",
+  "license": "MIT",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
-    "format": "prettier --check .",
-    "format:write": "prettier --write .",
+    "build": "tsc -b",
+    "clean": "rimraf dist",
+    "lint": "eslint \"**/*.{ts,tsx}\" --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "typecheck": "tsc -b"
   },
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "packages/*"
   ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "devDependencies": {
-    "@types/node": "22.5.4",
-    "@typescript-eslint/eslint-plugin": "7.16.1",
-    "@typescript-eslint/parser": "7.16.1",
-    "eslint": "8.57.0",
-    "eslint-config-prettier": "9.1.0",
-    "eslint-import-resolver-typescript": "3.6.1",
-    "eslint-plugin-import": "2.30.0",
-    "eslint-plugin-n": "17.10.3",
-    "eslint-plugin-promise": "6.1.1",
-    "prettier": "3.3.3",
-    "typescript": "5.5.4",
-    "vitest": "2.0.5"
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.5",
+    "@types/yargs": "^17.0.32",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vitest/coverage-v8": "^1.4.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "prettier": "^3.2.5",
+    "rimraf": "^5.0.5",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.5",
+    "vitest": "^1.4.0",
+    "@types/node": "^20.12.7"
   }
 }
