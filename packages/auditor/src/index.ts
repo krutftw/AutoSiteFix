@@ -3,54 +3,27 @@ import path from 'node:path';
 
 import { AxePuppeteer } from '@axe-core/puppeteer';
 import { load as loadHtml } from 'cheerio';
-import chromeLauncher from 'chrome-launcher';
-import lighthouse, { Flags as LighthouseFlags, RunnerResult } from 'lighthouse';
-import pLimit from 'p-limit';
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer from 'puppeteer';
 
-export interface AxeNodeSummary {
-  html: string;
-  target: string[];
-  failureSummary?: string;
-}
+type AxeAnalysis = Awaited<ReturnType<AxePuppeteer['analyze']>>;
 
-export interface AxeViolationSummary {
-  id: string;
-  impact?: string | null;
-  description: string;
-  helpUrl: string;
-  nodes: AxeNodeSummary[];
-}
-
-export interface LighthouseScoreSummary {
-  performance: number;
-  accessibility: number;
-  seo: number;
+export interface PageMetadata {
+  title: string | null;
+  status: number | null;
+  screenshotPath?: string;
 }
 
 export interface PageAuditResult {
   url: string;
-  lighthouse: {
-    scores: LighthouseScoreSummary;
-    details: RunnerResult['lhr'];
-  };
-  axe: {
-    violations: AxeViolationSummary[];
-  };
+  metadata: PageMetadata;
+  axe: AxeAnalysis;
   fetchedAt: string;
 }
 
-export interface AuditOptions {
-  /** Starting URL for the crawl. */
-  url: string;
-  /** Maximum number of pages to audit. */
-  pages?: number;
-  /** Directory to write intermediate artifacts such as raw Lighthouse reports. */
-  artifactDir?: string;
-  /** Optional callback fired when a page starts or finishes auditing. */
-  onProgress?: (event: AuditProgressEvent) => void;
-  /** Optional timeout per page in milliseconds. */
-  timeout?: number;
+export interface AuditRunResult {
+  pages: PageAuditResult[];
+  startedAt: string;
+  completedAt: string;
 }
 
 export type AuditProgressEvent =
@@ -60,10 +33,96 @@ export type AuditProgressEvent =
   | { type: 'page-complete'; url: string }
   | { type: 'error'; url: string; error: Error };
 
-export interface AuditRunResult {
-  pages: PageAuditResult[];
-  startedAt: string;
-  completedAt: string;
+export interface AuditOptions {
+  url: string;
+  pages?: number;
+  timeout?: number;
+  onProgress?: (event: AuditProgressEvent) => void;
+  captureScreenshots?: boolean;
+  screenshotDir?: string;
+}
+
+export interface PersistAuditOptions {
+  outputDir?: string;
+  title?: string;
+  includeHtml?: boolean;
+}
+
+export interface PersistAuditResult {
+  json: string;
+  html?: string;
+}
+
+const DEFAULT_TIMEOUT = 45_000;
+
+export async function runAudit(options: AuditOptions): Promise<AuditRunResult> {
+  const startedAt = new Date().toISOString();
+  const maxPages = Math.max(1, options.pages ?? 5);
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+
+  options.onProgress?.({ type: 'discover-start', url: options.url });
+  const urls = await discoverSameOriginUrls({
+    startUrl: options.url,
+    limit: maxPages,
+    timeout
+  });
+  options.onProgress?.({ type: 'discover-complete', urls });
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-dev-shm-usage']
+  });
+
+  try {
+    const pages: PageAuditResult[] = [];
+
+    for (const url of urls) {
+      options.onProgress?.({ type: 'page-start', url });
+      try {
+        const result = await auditSinglePage(browser, url, {
+          timeout,
+          captureScreenshots: options.captureScreenshots ?? false,
+          screenshotDir: options.screenshotDir
+        });
+        pages.push(result);
+        options.onProgress?.({ type: 'page-complete', url });
+      } catch (error) {
+        options.onProgress?.({
+          type: 'error',
+          url,
+          error: error instanceof Error ? error : new Error(String(error))
+        });
+      }
+    }
+
+    const completedAt = new Date().toISOString();
+    return { pages, startedAt, completedAt };
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+}
+
+export async function persistAuditArtifacts(
+  result: AuditRunResult,
+  options: PersistAuditOptions = {}
+): Promise<PersistAuditResult> {
+  const outputDir = path.resolve(options.outputDir ?? 'autositefix-report');
+  await fs.mkdir(outputDir, { recursive: true });
+
+  const jsonPath = path.join(outputDir, 'report.json');
+  await fs.writeFile(jsonPath, JSON.stringify(result, null, 2), 'utf8');
+
+  if (options.includeHtml === false) {
+    return { json: jsonPath };
+  }
+
+  const { writeReport } = await import('@autositefix/report');
+  const locations = await writeReport(result, {
+    outputDir,
+    title: options.title
+  });
+
+  return { json: jsonPath, html: locations.html };
 }
 
 interface DiscoverOptions {
@@ -72,51 +131,11 @@ interface DiscoverOptions {
   timeout: number;
 }
 
-const DEFAULT_TIMEOUT = 90_000;
-
-export async function runAudit(options: AuditOptions): Promise<AuditRunResult> {
-  const startedAt = new Date().toISOString();
-  const maxPages = Math.max(1, options.pages ?? 5);
-  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
-
-  options.onProgress?.({ type: 'discover-start', url: options.url });
-  const urls = await discoverUrls({
-    startUrl: options.url,
-    limit: maxPages,
-    timeout
-  });
-  options.onProgress?.({ type: 'discover-complete', urls });
-
-  const artifactDir = options.artifactDir ?? path.resolve('autositefix-report/.artifacts');
-  await fs.mkdir(artifactDir, { recursive: true });
-
-  const limit = pLimit(1);
-  const pages: PageAuditResult[] = [];
-
-  for (const url of urls) {
-    options.onProgress?.({ type: 'page-start', url });
-    try {
-      const result = await limit(() => auditSinglePage(url, artifactDir, timeout));
-      pages.push(result);
-      options.onProgress?.({ type: 'page-complete', url });
-    } catch (error) {
-      options.onProgress?.({
-        type: 'error',
-        url,
-        error: error instanceof Error ? error : new Error(String(error))
-      });
-    }
-  }
-
-  const completedAt = new Date().toISOString();
-  return {
-    pages,
-    startedAt,
-    completedAt
-  };
-}
-
-async function discoverUrls({ startUrl, limit, timeout }: DiscoverOptions): Promise<string[]> {
+async function discoverSameOriginUrls({
+  startUrl,
+  limit,
+  timeout
+}: DiscoverOptions): Promise<string[]> {
   const initialUrl = new URL(startUrl);
   const seen = new Set<string>();
   const queue: string[] = [initialUrl.href];
@@ -124,46 +143,66 @@ async function discoverUrls({ startUrl, limit, timeout }: DiscoverOptions): Prom
 
   while (queue.length > 0 && urls.length < limit) {
     const current = queue.shift();
-    if (!current || seen.has(current)) {
+    if (!current) {
       continue;
     }
-    seen.add(current);
-    urls.push(current);
+
+    const normalized = normalizeUrl(new URL(current));
+    if (seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    urls.push(normalized);
+
+    if (urls.length >= limit) {
+      break;
+    }
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      const response = await fetch(current, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(normalized, { signal: controller.signal });
 
-      if (!response.ok || response.headers.get('content-type')?.includes('text/html') !== true) {
-        continue;
-      }
+        if (!response.ok) {
+          continue;
+        }
 
-      const body = await response.text();
-      const $ = loadHtml(body);
-      $('a[href]')
-        .toArray()
-        .forEach((element) => {
-          const href = $(element).attr('href');
-          if (!href) return;
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('text/html')) {
+          continue;
+        }
 
-          try {
-            const resolved = new URL(href, current);
-            if (resolved.origin !== initialUrl.origin) {
+        const body = await response.text();
+        const $ = loadHtml(body);
+
+        $('a[href]')
+          .toArray()
+          .forEach((element) => {
+            const href = $(element).attr('href');
+            if (!href) {
               return;
             }
-            const normalized = normalizeUrl(resolved);
-            if (!seen.has(normalized) && !queue.includes(normalized) && urls.length + queue.length < limit * 3) {
-              queue.push(normalized);
+
+            try {
+              const resolved = new URL(href, normalized);
+              if (resolved.origin !== initialUrl.origin) {
+                return;
+              }
+
+              const normalizedHref = normalizeUrl(resolved);
+              if (!seen.has(normalizedHref) && !queue.includes(normalizedHref)) {
+                queue.push(normalizedHref);
+              }
+            } catch (error) {
+              void error;
             }
-          } catch (error) {
-            // Ignore malformed URLs.
-            void error;
-          }
-        });
+          });
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (error) {
-      // Ignore fetch errors and continue crawling.
       void error;
     }
   }
@@ -173,88 +212,57 @@ async function discoverUrls({ startUrl, limit, timeout }: DiscoverOptions): Prom
 
 function normalizeUrl(url: URL): string {
   url.hash = '';
-  if (url.pathname.endsWith('/')) {
-    url.pathname = url.pathname.slice(0, -1) || '/';
+  if (url.pathname.endsWith('/') && url.pathname !== '/') {
+    url.pathname = url.pathname.slice(0, -1);
   }
   return url.href;
 }
 
-async function auditSinglePage(url: string, artifactDir: string, timeout: number): Promise<PageAuditResult> {
-  const chrome = await chromeLauncher.launch({
-    chromeFlags: ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage']
-  });
+interface AuditPageOptions {
+  timeout: number;
+  captureScreenshots: boolean;
+  screenshotDir?: string;
+}
 
-  let browser: Browser | undefined;
+async function auditSinglePage(
+  browser: Awaited<ReturnType<typeof puppeteer.launch>>,
+  url: string,
+  options: AuditPageOptions
+): Promise<PageAuditResult> {
+  const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(options.timeout);
 
+  let response: Awaited<ReturnType<typeof page.goto>>;
   try {
-    browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${chrome.port}` });
+    response = await page.goto(url, { waitUntil: 'networkidle2' });
 
-    const lighthouseFlags: LighthouseFlags = {
-      port: chrome.port,
-      output: 'json',
-      logLevel: 'error'
-    };
+    const title = await page.title().catch(() => null);
+    const axe = await new AxePuppeteer(page).analyze();
 
-    const runner = await lighthouse(url, lighthouseFlags);
-    if (!runner?.lhr) {
-      throw new Error('Failed to obtain Lighthouse results');
+    let screenshotPath: string | undefined;
+    if (options.captureScreenshots) {
+      const dir = options.screenshotDir
+        ? path.resolve(options.screenshotDir)
+        : path.resolve('autositefix-report', 'screenshots');
+      await fs.mkdir(dir, { recursive: true });
+      const fileName = `${encodeURIComponent(page.url())}.png`;
+      screenshotPath = path.join(dir, fileName);
+      await page.screenshot({ path: screenshotPath, fullPage: true });
     }
 
-    const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(timeout);
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const axe = await new AxePuppeteer(page).analyze();
-    await page.close();
-
-    const lighthouseArtifactPath = path.join(
-      artifactDir,
-      `${encodeURIComponent(url)}-lighthouse.json`
-    );
-    await fs.writeFile(lighthouseArtifactPath, JSON.stringify(runner.lhr, null, 2), 'utf8');
-
-    const violations: AxeViolationSummary[] = axe.violations.map((violation) => ({
-      id: violation.id,
-      impact: violation.impact,
-      description: violation.description,
-      helpUrl: violation.helpUrl,
-      nodes: violation.nodes.map((node) => ({
-        html: node.html,
-        target: Array.isArray(node.target)
-          ? node.target.map((value) => value.toString())
-          : [],
-        failureSummary: node.failureSummary ?? undefined
-      }))
-    }));
+    const metadata: PageMetadata = {
+      title,
+      status: response ? response.status() : null,
+      screenshotPath
+    };
 
     return {
-      url,
-      lighthouse: {
-        scores: extractScores(runner),
-        details: runner.lhr
-      },
-      axe: {
-        violations
-      },
+      url: page.url() || url,
+      metadata,
+      axe,
       fetchedAt: new Date().toISOString()
     };
   } finally {
-    await browser?.close().catch(() => undefined);
-    try {
-      await chrome.kill();
-    } catch {
-      // ignore
-    }
+    await page.close().catch(() => undefined);
   }
-}
-
-function extractScores(runner: RunnerResult): LighthouseScoreSummary {
-  const performance = (runner.lhr.categories.performance?.score ?? 0) * 100;
-  const accessibility = (runner.lhr.categories.accessibility?.score ?? 0) * 100;
-  const seo = (runner.lhr.categories.seo?.score ?? 0) * 100;
-
-  return {
-    performance: Math.round(performance),
-    accessibility: Math.round(accessibility),
-    seo: Math.round(seo)
-  };
 }
