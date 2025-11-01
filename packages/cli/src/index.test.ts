@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@autositefix/auditor', () => ({
   runAudit: vi.fn()
-}), { virtual: true });
+}));
 
 vi.mock('@autositefix/report', () => ({
   writeReport: vi.fn(),
   summarize: vi.fn()
-}), { virtual: true });
+}));
 
 vi.mock('@autositefix/git', () => ({
   prepareRepository: vi.fn(),
   finalizePullRequest: vi.fn()
-}), { virtual: true });
+}));
 
 import { runAudit } from '@autositefix/auditor';
 import { finalizePullRequest, prepareRepository } from '@autositefix/git';
